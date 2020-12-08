@@ -1,0 +1,8 @@
+
+    * print timestamp in debug
+    * implement fatal_error macro
+
+    * finish test setup script
+    * refactor socket setup
+    * add rcv/snd buffer parameters
+    * add directory listing
