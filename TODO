@@ -5,4 +5,6 @@
     * finish test setup script
     * refactor socket setup
     * add rcv/snd buffer parameters
-    * add directory listing
+    * add directory listing (use header for protocol)
+    * move to C++
+    * add unit tests
