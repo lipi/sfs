@@ -1,5 +1,5 @@
 /*
- * Simple File Server https://github.com/lipi/fts
+ * Simple File Server - https://github.com/lipi/sfs
  * 
  * - serves files for reading (req#1)
  * - can handle multiple concurrent clients (req#2)
@@ -8,6 +8,8 @@
  * - optimized for narrow bandwidth, high latency (req#4)
  * - no dependencies (req#5)
  * - works on Linux
+ * 
+ * See client.c for client code.
  */
 
 
@@ -21,8 +23,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "common.h"
+
+typedef struct {
+	int sock;
+	struct sockaddr address;
+	unsigned int addr_len;
+} connection_t;
 
 void print_help(char* progname) {
     printf("Usage: %s [-p <port>] [-d <directory>]\n", progname);
@@ -30,47 +39,54 @@ void print_help(char* progname) {
     printf("       -d <directory> - directory to serve files from (default: current)\n");
 }
 
-typedef struct {
-	int sock;
-	struct sockaddr address;
-	int addr_len;
-} connection_t;
-
 void * connection_handler(void * ptr) {
 	size_t len;
-	connection_t * conn;
-
+    int fd = -1;
+    char* filename = NULL;
+    char ipv4_address[16]; // i.e. "123.123.123.123\0"
+                               
 	if (NULL == ptr) {
         pthread_exit(0);
     }
     
-	conn = (connection_t *)ptr;
-
-	receive_data(conn->sock, (char*)&len, sizeof(len));
+	connection_t * conn = (connection_t *)ptr;
+    long addr = (long)((struct sockaddr_in *)&conn->address)->sin_addr.s_addr;
+    snprintf(ipv4_address, sizeof(ipv4_address), "%d.%d.%d.%d",
+             (int)((addr      ) & 0xff),
+             (int)((addr >>  8) & 0xff),
+             (int)((addr >> 16) & 0xff),
+             (int)((addr >> 24) & 0xff));
+    
+	if (0 > receive_data(conn->sock, (char*)&len, sizeof(len)) ) {
+        perror(NULL);
+        fprintf(stderr, "can't receive from client %s", ipv4_address);
+        goto disconnect;
+    }
 	if (len > 0)
 	{
-		long addr = (long)((struct sockaddr_in *)&conn->address)->sin_addr.s_addr;
-		char* filename = (char *)malloc((len+1) * sizeof(char));
+        size_t num_bytes = (len+1) * sizeof(char);
+		filename = (char *)malloc(num_bytes);
         if (NULL == filename) {
-            perror(__FUNCTION__);
-            exit(EXIT_FAILURE);
+            perror(NULL);
+            fprintf(stderr, "can't allocate %lu bytes", num_bytes);
+            goto disconnect;
         }
+        
 		filename[len] = 0;
-		receive_data(conn->sock, filename, len);
+		if ( 0 > receive_data(conn->sock, filename, len) ) {
+            perror(NULL);
+            fprintf(stderr, "can't receive from client %s", ipv4_address);
+            goto disconnect;
+        }
 
         // TODO: mutex to avoid garbled lines
-		printf("%d.%d.%d.%d: %s - download started\n",
-               (int)((addr      ) & 0xff),
-               (int)((addr >>  8) & 0xff),
-               (int)((addr >> 16) & 0xff),
-               (int)((addr >> 24) & 0xff),
-               filename);
+		printf("%s: %s - download started\n", ipv4_address, filename);
 
-        int fd = open(filename, O_RDONLY);
+        fd = open(filename, O_RDONLY);
         if ( fd < 0 ) {
-            perror(__FUNCTION__);
-            fprintf(stderr, "error: can't open file: %s\n", filename);
-            exit(EXIT_FAILURE);
+            perror(NULL);
+            fprintf(stderr, "can't open file: %s\n", filename);
+            goto disconnect;
         }
         size_t chunk_size;
         size_t total_size = 0;
@@ -78,33 +94,30 @@ void * connection_handler(void * ptr) {
         do {
             chunk_size = read(fd, buffer, sizeof(buffer));
             if (chunk_size < 0 ) {
-                perror(__FUNCTION__);
-                exit(EXIT_FAILURE);
+                fprintf(stderr, "can't read from file: %s\n", filename);
+                goto close_file;
+                            
             }
             if (0 == chunk_size) {
                 break;
             }
             if (chunk_size != transmit_data(conn->sock, buffer, chunk_size)) {
-                perror(__FUNCTION__);
-                exit(EXIT_FAILURE);
+                fprintf(stderr, "can't send data to client\n");
+                goto close_file;
             }
             total_size += chunk_size;
         } while (chunk_size > 0);
         
         // TODO: mutex to avoid garbled lines
-		printf("%d.%d.%d.%d: %s - download finished (%lu bytes)\n",
-               (int)((addr      ) & 0xff),
-               (int)((addr >>  8) & 0xff),
-               (int)((addr >> 16) & 0xff),
-               (int)((addr >> 24) & 0xff),
-               filename, total_size);
-
-        close(fd);
-		free(filename);
+		printf("%s: %s - all data sent (%lu bytes)\n", ipv4_address, filename, total_size);
+        // 'sent', i.e. not guaranteed to be received
 	}
 
-    // clean up
-    
+  close_file:
+    close(fd);
+    free(filename);
+
+  disconnect:   
 	close(conn->sock);
 	free(conn);
 	pthread_exit(0);
@@ -120,6 +133,8 @@ int main(int argc, char* argv[])
 	connection_t * connection;
 	pthread_t thread;
 
+    setup_sigint_handler(sigint_handler);
+
     // process commandline parameters
     
     while ((opt = getopt(argc, argv, "p:d:")) != -1) {
@@ -127,7 +142,7 @@ int main(int argc, char* argv[])
         case 'p':
             port = strtoul(optarg, NULL, 10);
             if (0 == port || errno) {
-                fprintf(stderr, "%s: error: invalid port number: %s\n", argv[0], optarg);
+                fprintf(stderr, "error: invalid port number: %s\n", optarg);
                 exit(EXIT_FAILURE);
             }
             break;
@@ -141,37 +156,43 @@ int main(int argc, char* argv[])
     }
 
     if (0 != chdir(dirname)) {
-        fprintf(stderr, "%s: error: can't change to directory: %s\n", argv[0], dirname);
-        exit(EXIT_FAILURE);
+        exit_on_error("error: can't change to directory: %s\n", dirname);
     }
 
     // create socket
     
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock <= 0) {
-		fprintf(stderr, "%s: error: cannot create socket\n", argv[0]);
+		 exit_on_error("error: cannot create socket\n");
         exit(EXIT_FAILURE);
 	}
 
+    int tcp_snd_buf_size = 2 << 20; // due to high latency, see req#4
+    if (0 != setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)& tcp_snd_buf_size, sizeof(tcp_snd_buf_size))) {
+        perror(__func__);
+		fprintf(stderr, "error: can't set socket option\n");
+        exit(EXIT_FAILURE);
+    }
+    
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(port);
 	if (bind(sock, (struct sockaddr *)&address, sizeof(struct sockaddr_in)) < 0) {
-		fprintf(stderr, "%s: error: cannot bind socket to port %d\n", argv[0], port);
+		fprintf(stderr, "error: cannot bind socket to port %d\n", port);
         exit(EXIT_FAILURE);
 	}
 
 	if (listen(sock, CONNECTION_BACKLOG) < 0) {
-		fprintf(stderr, "%s: error: cannot listen on port\n", argv[0]);
+		fprintf(stderr, "error: cannot listen on port\n");
         exit(EXIT_FAILURE);
 	}
 
-	printf("%s: listening on port %u and serving files from %s\n", argv[0], port, dirname);
+	printf("listening on port %u and serving files from %s\n", port, dirname);
 
-    // start serving requests
+    // start serving requests concurrently (see req#2)
     
 	while (1) {
-		connection = (connection_t *)malloc(sizeof(connection_t)); // freed in the handler
+		connection = (connection_t *)calloc(1, sizeof(connection_t)); // freed in the handler
 		connection->sock = accept(sock, &connection->address, &connection->addr_len);
 		if (connection->sock <= 0) {
 			free(connection);

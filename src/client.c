@@ -1,9 +1,8 @@
 /*
-
-  Can handle file sizes up to 4GB
+ * Simple File Server - https://github.com/lipi/sfs
+ * 
+ * File transfer client, see server.c for server code.
  */
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -30,13 +29,11 @@ int main(int argc, char ** argv)
     char* hostname = DEFAULT_HOST;
     char* filename = NULL;
 	int port = DEFAULT_PORT;
-	int sock = -1;
-    int fd = -1;
-	struct sockaddr_in address;
-	struct hostent * host;
 	size_t len;
     char receive_buffer[RECEIVE_BUFFER_SIZE];
 
+    setup_sigint_handler(sigint_handler);
+    
     // process commandline parameters
     
     while ((opt = getopt(argc, argv, "h:p:f:")) != -1) {
@@ -48,6 +45,7 @@ int main(int argc, char ** argv)
             port = strtoul(optarg, NULL, 10);
             if (0 == port || errno) {
                 fprintf(stderr, "%s: error: invalid port number: %s\n", argv[0], optarg);
+                print_help(argv[0]);
                 exit(EXIT_FAILURE);
             }
             break;
@@ -68,38 +66,33 @@ int main(int argc, char ** argv)
         exit(EXIT_FAILURE);
     }
 
-    fd = creat(filename, FILE_MODE);
+    int fd = creat(filename, FILE_MODE);
     if (errno) {
-        perror(__FUNCTION__);
-		fprintf(stderr, "%s: error: can't create file %s\n", argv[0], filename);
-        exit(EXIT_FAILURE);
+        exit_on_error("%s: error: can't create file %s\n", argv[0], filename);
     }
     
     // create socket 
 
-	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sock <= 0)
-	{
-        perror(__FUNCTION__); // TODO: FATAL_ERROR macro
-		fprintf(stderr, "%s: error: can't create socket\n", argv[0]);
-        exit(EXIT_FAILURE);
+	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock <= 0) {
+        exit_on_error("%s: error: can't create socket\n", argv[0]);
 	}
 
-	address.sin_family = AF_INET;
+    int tcp_rcv_buf_size = 2 << 20;
+    if (0 != setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)& tcp_rcv_buf_size, sizeof(tcp_rcv_buf_size))) {
+        exit_on_error("%s: error: can't set socket option\n", argv[0]);
+    }
+    
+	struct sockaddr_in address;
+    address.sin_family = AF_INET;
 	address.sin_port = htons(port);
-	host = gethostbyname(hostname);
-	if (!host)
-	{
-        perror(__FUNCTION__);
-		fprintf(stderr, "%s: error: unknown host %s\n", argv[0], hostname);
-        exit(EXIT_FAILURE);
+	struct hostent * host = gethostbyname(hostname);
+	if (!host){
+        exit_on_error("%s: error: unknown host %s\n", argv[0], hostname);
 	}
 	memcpy(&address.sin_addr, host->h_addr_list[0], host->h_length);
-	if (connect(sock, (struct sockaddr *)&address, sizeof(address)))
-	{
-        perror(__FUNCTION__);
-		fprintf(stderr, "%s: error: can't connect to host %s\n", argv[0], hostname);
-        exit(EXIT_FAILURE);
+	if (connect(sock, (struct sockaddr *)&address, sizeof(address))) {
+        exit_on_error("%s: error: can't connect to host %s\n", argv[0], hostname);
 	}
 
 	// request file from server
@@ -117,9 +110,7 @@ int main(int argc, char ** argv)
             break;
         }
         if (chunk_size != write(fd, receive_buffer, chunk_size)) {
-            perror(__FUNCTION__);
-            fprintf(stderr, "%s: error: can't  write to file %s\n", argv[0], filename);
-            exit(EXIT_FAILURE);
+            exit_on_error("%s: error: can't  write to file %s\n", argv[0], filename);
         }
         remaining_size -= chunk_size;
     }
