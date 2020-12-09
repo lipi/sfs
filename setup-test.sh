@@ -2,9 +2,6 @@
 function generate_data() {
     mkdir data
     head -c 1M </dev/urandom > data/1M.bin
-    head -c 10M </dev/urandom > data/10M.bin
-    head -c 100M </dev/urandom > data/100M.bin
-    head -c 1G </dev/urandom > data/1G.bin
 }
 
 function setup_traffic_control() {
@@ -25,6 +22,23 @@ function setup_tcp_tuning() {
     sudo echo $BUFMAX > /proc/sys/net/core/rmem_max
 
 }
+
 function start_server() {
     cd data
-    
+    ../build/server
+}    
+
+function start_clients() {
+    clients=$1
+    delay=$2
+    for i in $(seq $clients)
+    do
+        echo Starting client $i...
+        $(mkdir -p client$i; cd client$i; ../build/client -f 1M.bin &>/dev/null)&
+        sleep $delay
+    done
+    wait
+    echo All done.
+}
+
+time start_clients 20 0.1

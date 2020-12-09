@@ -65,9 +65,6 @@ Create files with random data:
 
     mkdir data
     head -c 1M </dev/urandom > data/1M.bin
-    head -c 10M </dev/urandom > data/10M.bin
-    head -c 100M </dev/urandom > data/100M.bin
-    head -c 1G </dev/urandom > data/1G.bin
     
 Start the server:
 
@@ -122,3 +119,8 @@ Allow large transmit/receive buffers:
 # Memcheck
 
     valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ../build/server
+
+# Monitoring
+
+    sudo apt install speedometer
+    speedometer -r lo
