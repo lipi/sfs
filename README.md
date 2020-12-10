@@ -55,12 +55,15 @@ Client sends filename it wants download, server responds with data and closes co
 
     Usage: ./server [-p <port>] [-d <directory>]
            -p <port> - TCP port to listen on (default: 50000)
+           -b <size> - TCP transmit buffer size (default: 2097152)
            -d <directory> - directory to serve files from (default: current)
 
     Usage: ./client [-h <hostname>] [-p <port>] -f <filename>
            -h <host> - hostname to connect (default: localhost)
            -p <port> - TCP port to connect (default: 50000)
+           -b <size> - TCP receive buffer size (default: 2097152)
            -f <filename> - file to download
+           -c - continue file download
 
 # Testing on Linux
 

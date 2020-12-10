@@ -1,7 +1,6 @@
 
     * refactor socket setup
-    * add rcv/snd buffer parameters
-    * add directory listing (use header for protocol)
+    * add directory listing
     
     * move to C++ for easy mocking
     * add unit tests

@@ -36,6 +36,7 @@ typedef struct {
 void print_help(char* progname) {
     printf("Usage: %s [-p <port>] [-d <directory>]\n", progname);
     printf("       -p <port> - TCP port to listen on (default: %d)\n", DEFAULT_PORT);
+    printf("       -b <size> - TCP transmit buffer size (default: %d)\n", TCP_SND_BUFFER_SIZE);
     printf("       -d <directory> - directory to serve files from (default: current)\n");
 }
 
@@ -137,6 +138,7 @@ int main(int argc, char* argv[])
 {
     int opt;
     int port = DEFAULT_PORT;
+    int tcp_snd_buf_size = TCP_SND_BUFFER_SIZE; // due to high latency, see req#4
     char* dirname = DEFAULT_DIR;
     int sock = -1;
     struct sockaddr_in address;
@@ -148,12 +150,20 @@ int main(int argc, char* argv[])
 
     // process commandline parameters
     
-    while ((opt = getopt(argc, argv, "p:d:")) != -1) {
+    while ((opt = getopt(argc, argv, "p:d:b:")) != -1) {
         switch (opt) {
         case 'p':
             port = strtoul(optarg, NULL, 10);
             if (0 == port || errno) {
                 fprintf(stderr, "error: invalid port number: %s\n", optarg);
+                exit(EXIT_FAILURE);
+            }
+            break;
+        case 'b':
+            tcp_snd_buf_size = strtoul(optarg, NULL, 10);
+            if (0 == port || errno) {
+                fprintf(stderr, "error: invalid buffer size: %s\n", optarg);
+                print_help(argv[0]);
                 exit(EXIT_FAILURE);
             }
             break;
@@ -178,7 +188,6 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    int tcp_snd_buf_size = TCP_SND_BUFFER_SIZE; // due to high latency, see req#4
     if (0 != setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)& tcp_snd_buf_size, sizeof(tcp_snd_buf_size))) {
         perror(__func__);
         fprintf(stderr, "error: can't set socket option\n");

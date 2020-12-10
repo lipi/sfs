@@ -21,6 +21,7 @@ void print_help(char* progname) {
     printf("Usage: %s [-h <hostname>] [-p <port>] -f <filename>\n", progname);
     printf("       -h <host> - hostname to connect (default: %s)\n", DEFAULT_HOST);
     printf("       -p <port> - TCP port to connect (default: %d)\n", DEFAULT_PORT);
+    printf("       -b <size> - TCP receive buffer size (default: %d)\n", TCP_RCV_BUFFER_SIZE);
     printf("       -f <filename> - file to download\n");
     printf("       -c - continue file download\n");
 }
@@ -31,6 +32,7 @@ int main(int argc, char ** argv)
     char* hostname = DEFAULT_HOST;
     char* filename = NULL;
     int port = DEFAULT_PORT;
+    int tcp_rcv_buf_size = TCP_RCV_BUFFER_SIZE;
     char receive_buffer[RECEIVE_BUFFER_SIZE];
     bool cont = false;
 
@@ -39,7 +41,7 @@ int main(int argc, char ** argv)
     
     // process commandline parameters
     
-    while ((opt = getopt(argc, argv, "h:p:f:c")) != -1) {
+    while ((opt = getopt(argc, argv, "h:p:b:f:c")) != -1) {
         switch (opt) {
         case 'h':
             hostname = optarg;
@@ -48,6 +50,14 @@ int main(int argc, char ** argv)
             port = strtoul(optarg, NULL, 10);
             if (0 == port || errno) {
                 fprintf(stderr, "error: invalid port number: %s\n", optarg);
+                print_help(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            break;
+        case 'b':
+            tcp_rcv_buf_size = strtoul(optarg, NULL, 10);
+            if (0 == port || errno) {
+                fprintf(stderr, "error: invalid buffer size: %s\n", optarg);
                 print_help(argv[0]);
                 exit(EXIT_FAILURE);
             }
@@ -104,7 +114,6 @@ int main(int argc, char ** argv)
         exit_on_error("can't create socket");
     }
 
-    int tcp_rcv_buf_size = TCP_RCV_BUFFER_SIZE;
     if (0 != setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)& tcp_rcv_buf_size, sizeof(tcp_rcv_buf_size))) {
         exit_on_error("can't set socket option");
     }
