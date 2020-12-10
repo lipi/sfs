@@ -20,7 +20,10 @@ Client sends filename it wants download, server responds with data and closes co
             client                              server
             
                |                                   |
-               |    filename length (8 bytes)      |
+               |      file offset (8 bytes)        |
+               |---------------------------------> |
+               |                                   |
+               |    filename length (4 bytes)      |
                |---------------------------------> |
                |                                   |
                |      filename (N bytes)           |

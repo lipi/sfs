@@ -32,7 +32,8 @@ int main(int argc, char ** argv)
     size_t len;
     char receive_buffer[RECEIVE_BUFFER_SIZE];
 
-    setup_sigint_handler(sigint_handler);
+    errno = 0;
+    setup_signal_handler(signal_handler);
     
     // process commandline parameters
     
@@ -44,7 +45,7 @@ int main(int argc, char ** argv)
         case 'p':
             port = strtoul(optarg, NULL, 10);
             if (0 == port || errno) {
-                fprintf(stderr, "%s: error: invalid port number: %s\n", argv[0], optarg);
+                fprintf(stderr, "error: invalid port number: %s\n", optarg);
                 print_help(argv[0]);
                 exit(EXIT_FAILURE);
             }
@@ -59,28 +60,29 @@ int main(int argc, char ** argv)
     }
 
     // create local file
-    
+
     if (NULL == filename) {
-        fprintf(stderr, "%s: error: missing filename\n", argv[0]);
+        fprintf(stderr, "error: missing filename\n");
         print_help(argv[0]);
         exit(EXIT_FAILURE);
     }
+    size_t file_size = 0; // TODO: check current size
 
-    int fd = creat(filename, FILE_MODE);
+    int fd = creat(filename, FILE_MODE); // we may end up with zero length file
     if (errno) {
-        exit_on_error("%s: error: can't create file %s\n", argv[0], filename);
+        exit_on_error("error: can't create file %s\n", filename);
     }
-    
+
     // create socket 
 
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock <= 0) {
-        exit_on_error("%s: error: can't create socket\n", argv[0]);
+        exit_on_error("error: can't create socket\n");
     }
 
-    int tcp_rcv_buf_size = 2 << 20;
+    int tcp_rcv_buf_size = TCP_RCV_BUFFER_SIZE;
     if (0 != setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)& tcp_rcv_buf_size, sizeof(tcp_rcv_buf_size))) {
-        exit_on_error("%s: error: can't set socket option\n", argv[0]);
+        exit_on_error("error: can't set socket option\n");
     }
     
     struct sockaddr_in address;
@@ -88,31 +90,38 @@ int main(int argc, char ** argv)
     address.sin_port = htons(port);
     struct hostent * host = gethostbyname(hostname);
     if (!host){
-        exit_on_error("%s: error: unknown host %s\n", argv[0], hostname);
+        exit_on_error("error: unknown host %s\n", hostname);
     }
     memcpy(&address.sin_addr, host->h_addr_list[0], host->h_length);
     if (connect(sock, (struct sockaddr *)&address, sizeof(address))) {
-        exit_on_error("%s: error: can't connect to host %s\n", argv[0], hostname);
+        exit_on_error("error: can't connect to host %s\n", hostname);
     }
 
     // request file from server
     
-    len = strlen(filename);
-    transmit_data(sock, (char*)&len, sizeof(len));
-    transmit_data(sock, filename, len);
-
-    size_t remaining_size = len;
-    while (remaining_size > 0 ) {
-        size_t chunk_size;
+    size_t filename_len = strlen(filename); // excluding \0
+    request_t* request;
+    size_t request_size = sizeof(header_t) + filename_len + 1; // including \0
+    request = calloc(request_size, 1);
+    if (NULL == request) {
+        exit_on_error("error: can't allocate %lu bytes\n", filename_len);
+    }
+    request->header.offset = file_size;
+    request->header.filename_len = filename_len;
+    memcpy(request->filename, filename, filename_len);
+    transmit_data(sock, (char*)request, request_size);
+    free(request);
+   
+    while ( 1 ) {
+        ssize_t chunk_size;
         chunk_size = receive_data(sock, receive_buffer, sizeof(receive_buffer));
-        if (0 == chunk_size) {
+        if (0 >= chunk_size) {
             // retry?
             break;
         }
         if (chunk_size != write(fd, receive_buffer, chunk_size)) {
-            exit_on_error("%s: error: can't  write to file %s\n", argv[0], filename);
+            exit_on_error("error: can't  write to file %s\n", filename);
         }
-        remaining_size -= chunk_size;
     }
     
     // clean up

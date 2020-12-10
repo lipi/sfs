@@ -40,7 +40,6 @@ void print_help(char* progname) {
 }
 
 void * connection_handler(void * ptr) {
-    size_t len;
     int fd = -1;
     char* filename = NULL;
     char ipv4_address[16]; // i.e. "123.123.123.123\0"
@@ -56,24 +55,25 @@ void * connection_handler(void * ptr) {
              (int)((addr >>  8) & 0xff),
              (int)((addr >> 16) & 0xff),
              (int)((addr >> 24) & 0xff));
-    
-    if (0 > receive_data(conn->sock, (char*)&len, sizeof(len)) ) {
+
+    header_t header;
+    if (0 > receive_data(conn->sock, (char*)&header, sizeof(header)) ) {
         perror(NULL);
         fprintf(stderr, "can't receive from client %s", ipv4_address);
         goto disconnect;
     }
-    if (len > 0)
+    
+    if (header.filename_len > 0)
     {
-        size_t num_bytes = (len+1) * sizeof(char);
-        filename = (char *)malloc(num_bytes);
+        size_t num_bytes = (header.filename_len + 1) * sizeof(char);
+        filename = (char *)calloc(num_bytes, 1);
         if (NULL == filename) {
             perror(NULL);
             fprintf(stderr, "can't allocate %lu bytes", num_bytes);
             goto disconnect;
         }
         
-        filename[len] = 0;
-        if ( 0 > receive_data(conn->sock, filename, len) ) {
+        if ( 0 > receive_data(conn->sock, filename, num_bytes) ) {
             perror(NULL);
             fprintf(stderr, "can't receive from client %s", ipv4_address);
             goto disconnect;
@@ -88,12 +88,16 @@ void * connection_handler(void * ptr) {
             fprintf(stderr, "can't open file: %s\n", filename);
             goto disconnect;
         }
+
+        // TODO: offset
+        
         size_t chunk_size;
         size_t total_size = 0;
         char buffer[TRANSMIT_BUFFER_SIZE];
         do {
             chunk_size = read(fd, buffer, sizeof(buffer));
             if (chunk_size < 0 ) {
+                perror(NULL);
                 fprintf(stderr, "can't read from file: %s\n", filename);
                 goto close_file;
                             
@@ -133,7 +137,8 @@ int main(int argc, char* argv[])
     connection_t * connection;
     pthread_t thread;
 
-    setup_sigint_handler(sigint_handler);
+    errno = 0;
+    setup_signal_handler(signal_handler);
 
     // process commandline parameters
     
@@ -167,7 +172,7 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    int tcp_snd_buf_size = 2 << 20; // due to high latency, see req#4
+    int tcp_snd_buf_size = TCP_SND_BUFFER_SIZE; // due to high latency, see req#4
     if (0 != setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)& tcp_snd_buf_size, sizeof(tcp_snd_buf_size))) {
         perror(__func__);
         fprintf(stderr, "error: can't set socket option\n");
