@@ -78,7 +78,7 @@ int main(int argc, char ** argv)
         fd = open(filename, O_WRONLY, FILE_MODE);
         if (errno) {
             perror(NULL);
-            exit_on_error("can't open file %s\n", filename);
+            exit_on_error("can't open file %s", filename);
         }
         
         struct stat st;
@@ -88,12 +88,12 @@ int main(int argc, char ** argv)
         debug_print("seeking to end: %ld\n", file_size);
         if ( 0 > lseek(fd, file_size, SEEK_END)) {
             perror(NULL);
-            exit_on_error("can't seek in file %s\n", filename);
+            exit_on_error("can't seek in file %s", filename);
         }
     } else {
         fd = creat(filename, FILE_MODE); // we may end up with zero length file
         if (errno) {
-            exit_on_error("can't create file %s\n", filename);
+            exit_on_error("can't create file %s", filename);
         }
     }
 
@@ -101,12 +101,12 @@ int main(int argc, char ** argv)
 
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock <= 0) {
-        exit_on_error("can't create socket\n");
+        exit_on_error("can't create socket");
     }
 
     int tcp_rcv_buf_size = TCP_RCV_BUFFER_SIZE;
     if (0 != setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)& tcp_rcv_buf_size, sizeof(tcp_rcv_buf_size))) {
-        exit_on_error("can't set socket option\n");
+        exit_on_error("can't set socket option");
     }
     
     struct sockaddr_in address;
@@ -114,11 +114,11 @@ int main(int argc, char ** argv)
     address.sin_port = htons(port);
     struct hostent * host = gethostbyname(hostname);
     if (!host){
-        exit_on_error("unknown host %s\n", hostname);
+        exit_on_error("unknown host %s", hostname);
     }
     memcpy(&address.sin_addr, host->h_addr_list[0], host->h_length);
     if (connect(sock, (struct sockaddr *)&address, sizeof(address))) {
-        exit_on_error("can't connect to host %s\n", hostname);
+        exit_on_error("can't connect to host %s on port %d", hostname, port);
     }
 
     // request file from server
@@ -128,7 +128,7 @@ int main(int argc, char ** argv)
     size_t request_size = sizeof(header_t) + filename_len + 1; // including \0
     request = calloc(request_size, 1);
     if (NULL == request) {
-        exit_on_error("can't allocate %lu bytes\n", filename_len);
+        exit_on_error("can't allocate %lu bytes", filename_len);
     }
     request->header.offset = file_size;
     request->header.filename_len = filename_len;
@@ -144,7 +144,7 @@ int main(int argc, char ** argv)
             break;
         }
         if (chunk_size != write(fd, receive_buffer, chunk_size)) {
-            exit_on_error("can't  write to file %s\n", filename);
+            exit_on_error("can't  write to file %s", filename);
         }
     }
     

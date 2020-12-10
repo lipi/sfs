@@ -42,10 +42,10 @@ void setup_signal_handler(void (*handler)(int)) {
     sigemptyset(&sa.sa_mask);
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        exit_on_error("can't change sigaction for SIGINT\n");
+        exit_on_error("can't change sigaction for SIGINT");
     }
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
-        exit_on_error("can't change sigaction for SIGINT\n");
+        exit_on_error("can't change sigaction for SIGINT");
     }
 }
 

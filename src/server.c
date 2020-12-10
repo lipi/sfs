@@ -167,14 +167,14 @@ int main(int argc, char* argv[])
     }
 
     if (0 != chdir(dirname)) {
-        exit_on_error("can't change to directory: %s\n", dirname);
+        exit_on_error("can't change to directory: %s", dirname);
     }
 
     // create socket
     
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock <= 0) {
-         exit_on_error("cannot create socket\n");
+         exit_on_error("cannot create socket");
         exit(EXIT_FAILURE);
     }
 
