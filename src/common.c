@@ -9,7 +9,7 @@
 #include "common.h"
 
 int transmit_data(int sock, char* buffer, size_t size) {
-	size_t bytes_sent = write(sock, buffer, size);
+    size_t bytes_sent = write(sock, buffer, size);
     debug_print("sent %lu bytes\n", bytes_sent);
     if (bytes_sent != size) {
         perror(__FUNCTION__); 
@@ -19,7 +19,7 @@ int transmit_data(int sock, char* buffer, size_t size) {
 }
 
 int receive_data(int sock, char* buffer, size_t size) {
-	size_t bytes_received = read(sock, buffer, size);
+    size_t bytes_received = read(sock, buffer, size);
     debug_print("received %lu bytes\n", bytes_received);
     return bytes_received;
 }
