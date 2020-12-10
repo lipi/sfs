@@ -26,7 +26,7 @@
     do { perror(__func__); fprintf(stderr, "error: " #fmt "\n", ## __VA_ARGS__); exit(EXIT_FAILURE); } while (0);
 
 typedef struct __attribute__((packed, aligned(4))) {
-    uint64_t offset;
+    int64_t offset;
     uint32_t filename_len;
 } header_t;
 
@@ -35,8 +35,8 @@ typedef struct __attribute__((packed, aligned(4))) {
     char filename[1]; // first character of filename
 } request_t;
 
-ssize_t transmit_data(int sock, char* buffer, size_t size);
-ssize_t receive_data(int sock, char* buffer, size_t size);
+ssize_t transmit_data(int sock, char* buffer, ssize_t size);
+ssize_t receive_data(int sock, char* buffer, ssize_t size);
 double seconds_since_epoch(void);
 void setup_signal_handler(void (*handler)(int));
 void signal_handler(int sig);

@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(fts)
 
+set(CMAKE_C_FLAGS "-O0 -g -Wall -Wextra -Werror")
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 

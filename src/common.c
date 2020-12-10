@@ -8,7 +8,7 @@
 
 #include "common.h"
 
-ssize_t transmit_data(int sock, char* buffer, size_t size) {
+ssize_t transmit_data(int sock, char* buffer, ssize_t size) {
     ssize_t bytes_sent = write(sock, buffer, size);
     debug_print("sent %ld bytes\n", bytes_sent);
     if (bytes_sent != size) {
@@ -18,7 +18,7 @@ ssize_t transmit_data(int sock, char* buffer, size_t size) {
     return bytes_sent;
 }
 
-ssize_t receive_data(int sock, char* buffer, size_t size) {
+ssize_t receive_data(int sock, char* buffer, ssize_t size) {
     ssize_t bytes_received = read(sock, buffer, size);
     debug_print("received %ld bytes\n", bytes_received);
     if ( bytes_received < 0 ) {
@@ -42,14 +42,14 @@ void setup_signal_handler(void (*handler)(int)) {
     sigemptyset(&sa.sa_mask);
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        exit_on_error("error: can't change sigaction for SIGINT\n");
+        exit_on_error("can't change sigaction for SIGINT\n");
     }
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
-        exit_on_error("error: can't change sigaction for SIGINT\n");
+        exit_on_error("can't change sigaction for SIGINT\n");
     }
 }
 
-void signal_handler(int sig) {
+void signal_handler(int sig __attribute__((unused))) {
     printf("\nExiting...\n");
     exit(EXIT_SUCCESS);
 }

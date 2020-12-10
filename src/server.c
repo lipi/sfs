@@ -89,10 +89,16 @@ void * connection_handler(void * ptr) {
             goto disconnect;
         }
 
-        // TODO: offset
+        if (header.offset > 0 ) {
+            if (header.offset != lseek(fd, header.offset, SEEK_SET)) {
+                perror(NULL);
+                fprintf(stderr, "can't seek to offset %ld", header.offset);
+                goto close_file;
+            }
+        }
         
-        size_t chunk_size;
-        size_t total_size = 0;
+        ssize_t chunk_size;
+        ssize_t total_size = 0;
         char buffer[TRANSMIT_BUFFER_SIZE];
         do {
             chunk_size = read(fd, buffer, sizeof(buffer));
@@ -161,14 +167,14 @@ int main(int argc, char* argv[])
     }
 
     if (0 != chdir(dirname)) {
-        exit_on_error("error: can't change to directory: %s\n", dirname);
+        exit_on_error("can't change to directory: %s\n", dirname);
     }
 
     // create socket
     
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock <= 0) {
-         exit_on_error("error: cannot create socket\n");
+         exit_on_error("cannot create socket\n");
         exit(EXIT_FAILURE);
     }
 
